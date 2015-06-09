@@ -1,0 +1,103 @@
+<?php
+
+/*
+Requires BSD-3-Clause licensed JWT class available at:
+https://github.com/firebase/php-jwt
+
+Download and extract the PHP JWT package from https://github.com/firebase/php-jwt into this module's root.
+
+The only required file is JWT/Authentication/JWT.php
+
+This module expects the JWT.php file to be in /JWT/Authentication/JWT.php
+
+If this is not the case, update the 'require_once' line in diff_io.module
+
+(Same as JWT Link module)
+@TODO: -- is there a JWT library module that should be brought in here?
+*/
+
+require_once 'JWT.php';
+
+
+/**
+ * Implementation of hook_menu().
+ */
+function diff_io_menu() {
+
+  $items['admin/settings/diff_io'] = array(
+    'title' => 'diff.io ' . t('settings'),
+    'description' => t('Configure') . ' diff.io',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('diff_io_admin_settings'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_NORMAL_ITEM,
+    'file' => 'diff_io.admin.inc'
+  );
+
+  return $items;
+}
+
+function diff_io_url($url1, $url2 = '') {
+
+  # get the values for the account
+  $apikey = variable_get('diff_io_api_key', '');
+  $secret = variable_get('diff_io_secret_key', '');
+  $host = variable_get('diff_io_host', '');
+
+  # do not generate requests that the server will just drop
+  if( empty( $apikey ) || empty( $secret ) || empty( $host ) ) {
+    drupal_watchdog( t('Cannot generate a valid diff.io request, required module settings are missing.') );
+    return "";
+  }
+
+  # declare the url to capture and diff
+  $claims = array(
+      "iss" => $apikey,
+      "jti" => $apikey + "/" + microtime(),
+      "url1" => $url1
+  );
+
+  # used for page vs page calls
+  if( !empty( $url2 ) ) {
+    $claims["url2"] = $url2;
+  }
+
+  # generate token
+  $jwt = JWT::encode($claims, $secret, "HS256");
+
+  return "{$host}{$apikey}/{$jwt}";
+}
+
+function diff_io_call( $url1, $url2='' ){
+
+  $calls_this_month = (int) variable_get('diff_io_monthly_calls:'. date("Y-m"), '0');
+
+  $monthly_max = (int) variable_get('diff_io_monthly_max', '100');
+
+  if( $calls_this_month < $monthly_max ){
+
+    $call = drupal_http_request( diff_io_url( $url1, $url2 ) );
+
+    // only record this against the monthly limit if call completed
+    if( $call->code == 200 ){
+      variable_set('diff_io_monthly_calls:'. date("Y-m"), ($calls_this_month+1) );
+
+      // $call->data == { "diff": "io", "status": "pending", "rate": "1/60", "queue": "1/2000" }
+      // $call->code == 200
+      //   then $call->redirect_url == https://diffio.global.ssl.fastly.net/v1/diffs/2015-06-07/d7ba2fc205d58373b02a70c0a6b7dc54395004f4/results.json
+
+      // @todo: better handle the error case if call didn't work, failed, didn't have a redirect_url property, etc.
+      return $call->redirect_url;
+
+    }
+
+    // call did not 200, so... 
+    watchdog('diff_io', "Diff.io call resulted in a non-200 response. data: %url1 %url2", array('%url1' => $url1, '%url2' => $url2), WATCHDOG_WARNING);
+
+  }
+  else{
+
+    watchdog('diff_io', "Over allowed limit for this month: %so_far/%max", array('%so_far' => $calls_this_month, '%max' => $monthly_max), WATCHDOG_ERROR);
+  }
+  return false;
+}
