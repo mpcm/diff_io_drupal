@@ -65,12 +65,4 @@ function diff_io_admin_settings() {
 
 function diff_io_setting_validate($form, $form_state){
     $config_date_expiration = $form_state['values']['limit']['config_date_expiration'];
-
-    die('test');
-    // if (!is_numeric($config_date_expiration)) {
-    //     form_set_error('config_date_expiration', t('You must enter an integer for the date expiration of point.'));
-    // }
-    // elseif ($config_date_expiration <= 0) {
-    //     form_set_error('config_date_expiration', t('The date expiration of point must be positive.'));
-    // }
 }
