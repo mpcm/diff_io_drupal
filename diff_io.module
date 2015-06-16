@@ -1,23 +1,6 @@
 <?php
 
-/*
-Requires BSD-3-Clause licensed JWT class available at:
-https://github.com/firebase/php-jwt
-
-Download and extract the PHP JWT package from https://github.com/firebase/php-jwt into this module's root.
-
-The only required file is JWT/Authentication/JWT.php
-
-This module expects the JWT.php file to be in /JWT/Authentication/JWT.php
-
-If this is not the case, update the 'require_once' line in diff_io.module
-
-(Same as JWT Link module)
-@TODO: -- is there a JWT library module that should be brought in here?
-*/
-
 require_once 'JWT.php';
-
 
 /**
  * Implementation of hook_menu().
@@ -42,7 +25,7 @@ function diff_io_url($url1, $url2 = '') {
   # get the values for the account
   $apikey = variable_get('diff_io_api_key', '');
   $secret = variable_get('diff_io_secret_key', '');
-  $host = variable_get('diff_io_host', '');
+  $host = variable_get('diff_io_host', 'https://api.diff.io');
 
   # do not generate requests that the server will just drop
   if( empty( $apikey ) || empty( $secret ) || empty( $host ) ) {
@@ -52,15 +35,16 @@ function diff_io_url($url1, $url2 = '') {
 
   # declare the url to capture and diff
   $claims = array(
-      "iss" => $apikey,
-      "jti" => $apikey + "/" + microtime(),
-      "url1" => $url1
+    "iss" => $apikey,
+    "url1" => $url1
   );
 
-  # used for page vs page calls
+  # add url2 for page vs page
   if( !empty( $url2 ) ) {
     $claims["url2"] = $url2;
   }
+  # create a jti for this request, at this point in microtime
+  $claims["jti"] = sha1( serialize( $claims ) ) . microtime(true);
 
   # generate token
   $jwt = JWT::encode($claims, $secret, "HS256");
@@ -82,9 +66,11 @@ function diff_io_call( $url1, $url2='' ){
     if( $call->code == 200 ){
       variable_set('diff_io_monthly_calls:'. date("Y-m"), ($calls_this_month+1) );
 
+      // initial response will be a redirect to a then 200 json page
       // $call->data == { "diff": "io", "status": "pending", "rate": "1/60", "queue": "1/2000" }
+      
       // $call->code == 200
-      //   then $call->redirect_url == https://diffio.global.ssl.fastly.net/v1/diffs/2015-06-07/d7ba2fc205d58373b02a70c0a6b7dc54395004f4/results.json
+      //   then $call->redirect_url == https://diffio.global.ssl.fastly.net/v1/diffs/{date}/{jobid}/results.json
 
       // @todo: better handle the error case if call didn't work, failed, didn't have a redirect_url property, etc.
       return $call->redirect_url;
@@ -96,7 +82,6 @@ function diff_io_call( $url1, $url2='' ){
 
   }
   else{
-
     watchdog('diff_io', "Over allowed limit for this month: %so_far/%max", array('%so_far' => $calls_this_month, '%max' => $monthly_max), WATCHDOG_ERROR);
   }
   return false;
