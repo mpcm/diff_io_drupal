@@ -68,7 +68,7 @@ function diff_io_call( $url1, $url2='' ){
 
       // initial response will be a redirect to a then 200 json page
       // $call->data == { "diff": "io", "status": "pending", "rate": "1/60", "queue": "1/2000" }
-      
+
       // $call->code == 200
       //   then $call->redirect_url == https://diffio.global.ssl.fastly.net/v1/diffs/{date}/{jobid}/results.json
 
@@ -77,7 +77,7 @@ function diff_io_call( $url1, $url2='' ){
 
     }
 
-    // call did not 200, so... 
+    // call did not 200, so...
     watchdog('diff_io', "Diff.io call resulted in a non-200 response. data: %url1 %url2", array('%url1' => $url1, '%url2' => $url2), WATCHDOG_WARNING);
 
   }
@@ -86,3 +86,15 @@ function diff_io_call( $url1, $url2='' ){
   }
   return false;
 }
+function diff_io_node_update($node){
+
+  $url = url('node/' . $node->nid, array('absolute' => TRUE) );
+  drupal_set_message($url);
+  // http://drupal-7-37.dd:8083/node/6
+  // http://drupal-7-37.dd:8083/somenewpage
+}
+
+// function diff_io_post_insert($nid) {
+// $nodeurl = url('node/'. $node->nid);
+// $alias = drupal_get_path_alias('node/37');
+// }
